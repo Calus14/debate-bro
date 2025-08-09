@@ -1,0 +1,8 @@
+version: '3'
+services:
+  echo-bot:
+    build: .
+    env_file:
+      - .env.local # change to .env.local if you want to run locally.
+    network_mode: "host"
+    restart: unless-stopped

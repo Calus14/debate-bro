@@ -1,0 +1,10 @@
+{
+  "join": {
+    "name": "join",
+    "description": "Starts recording audio in your voice channel."
+  },
+  "leave": {
+    "name": "leave",
+    "description": "Stops the recording and provides the audio files."
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "dependencies": {
+    "@discordjs/opus": "^0.10.0",
+    "@discordjs/voice": "^0.16.1",
+    "discord.js": "^14.21.0",
+    "dotenv": "^16.6.1",
+    "libsodium-wrappers": "^0.7.15",
+    "prism-media": "^1.3.5",
+    "wav": "^1.0.2",
+    "winston": "^3.17.0",
+    "winston-daily-rotate-file": "^5.0.0"
+  },
+  "name": "discord-bot",
+  "description": "This is an **experimental Discord bot** designed to join voice channels, record conversations, and provide playback of individual user audio. The goal is to maintain conversational history, including the ability to review **exact spoken words** from different users.",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
