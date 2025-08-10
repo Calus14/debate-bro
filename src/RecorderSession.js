@@ -96,66 +96,74 @@ class RecorderSession {
     }
 
     _wireSpeaking() {
-        this.receiver.speaking.on('start', userId => {
-            if (this.subscriptions.has(userId)) return;
-            const opusStream = this.receiver.subscribe(userId, {
-                end: { behavior: EndBehaviorType.AfterSilence, duration: END_SILENCE_MS }
-            });
-            const decoder = new prism.opus.Decoder({ rate: 48000, channels: 2, frameSize: 960 });
+        this.receiver.speaking.on('start', (userId) => {
+            const existing = this.subscriptions.get(userId);
+            let opusStream, decoder;
 
-            const cleanup = () => {
-                try { opusStream.removeAllListeners(); } catch {}
-                try { decoder.removeAllListeners(); } catch {}
-                try { opusStream.destroy(); } catch {}
-                try { decoder.destroy(); } catch {}
-                this.subscriptions.delete(userId);
-            };
-            opusStream.once('end', cleanup);
-            opusStream.once('close', cleanup);
-            opusStream.once('finish', cleanup);
-            decoder.once('end', cleanup);
-            decoder.on('error', cleanup);
-            opusStream.on('error', cleanup);
+            if (!existing) {
+                opusStream = this.receiver.subscribe(userId, {
+                    end: { behavior: EndBehaviorType.Manual }
+                });
 
-            // Record when the user starts speaking relative to the beginning of the recording
+                decoder = new prism.opus.Decoder({
+                    rate: 48000,
+                    channels: 2,
+                    frameSize: 960
+                });
+
+                // idempotent cleanup; also finalizes any open segment
+                const cleanup = (() => {
+                    let done = false;
+                    return () => {
+                        if (done) return; done = true;
+
+                        const startTime = this.activeSpeakers.get(userId);
+                        if (startTime !== undefined) {
+                            const endTime = Date.now() - this.recordStart;
+                            this.segments.push({ userId, start: startTime, end: endTime });
+                            this.activeSpeakers.delete(userId);
+                            logger.info("removing user " + userId);
+                        }
+
+                        try { opusStream.removeAllListeners(); decoder.removeAllListeners(); } catch {}
+                        try { opusStream.destroy(); decoder.destroy(); } catch {}
+                        this.subscriptions.delete(userId);
+                    };
+                })();
+
+                opusStream.once('end', cleanup);
+                opusStream.once('close', cleanup);
+                opusStream.on('error', cleanup);
+                decoder.on('error', cleanup);
+
+                decoder.on('data', (pcm) => {
+                    for (const frame of AudioMixer.sliceIntoFrames(pcm)) {
+                        this.mixer.pushPCMFrame(userId, frame);
+                    }
+                });
+
+                // set sub before piping to avoid races
+                this.subscriptions.set(userId, { opusStream, decoder });
+                opusStream.pipe(decoder);
+            }
+
+            // (re)start a segment if not already marked active
             if (!this.activeSpeakers.has(userId)) {
-                logger.info("adding speaker "+userId)
+                logger.info("adding speaker " + userId);
                 const startTime = Date.now() - this.recordStart;
                 this.activeSpeakers.set(userId, startTime);
             }
-
-            decoder.on('data', (pcm) => {
-                // slice PCM into 20‑ms frames (960 samples/channel @ 48 kHz, stereo 16‑bit)
-                for (let off = 0; off + 960 * 2 * 2 <= pcm.length; off += 960 * 2 * 2) {
-                    this.mixer.pushPCMFrame(userId, pcm.subarray(off, off + 960 * 2 * 2));
-                }
-            });
-
-            opusStream.pipe(decoder);
-            this.subscriptions.set(userId, { opusStream, decoder });
         });
 
-        // safety: tear down lingering streams after the silence window
-        this.receiver.speaking.on('end', userId => {
-            const sub = this.subscriptions.get(userId);
-            if (!sub) return;
-
-            // Record when the user stops speaking relative to the beginning of the recording
+        this.receiver.speaking.on('end', (userId) => {
             const startTime = this.activeSpeakers.get(userId);
             if (startTime !== undefined) {
                 const endTime = Date.now() - this.recordStart;
                 this.segments.push({ userId, start: startTime, end: endTime });
                 this.activeSpeakers.delete(userId);
-                logger.info("removing user "+userId)
+                logger.info("removing user " + userId);
             }
-
-            setTimeout(() => {
-                if (this.subscriptions.has(userId)) {
-                    try { sub.opusStream.destroy(); } catch {}
-                    try { sub.decoder.destroy(); } catch {}
-                    this.subscriptions.delete(userId);
-                }
-            }, END_SILENCE_MS + 250);
+            // no stream teardown here; subscriptions persist between pauses
         });
     }
 
