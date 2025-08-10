@@ -4,7 +4,7 @@ const wav = require('wav');
 const path = require('path');
 const AudioMixer = require('./AudioMixer');
 
-const END_SILENCE_MS = Number(process.env.END_SILENCE_MS || 30000);
+const END_SILENCE_MS = Number(process.env.END_SILENCE_MS || 30000); // silence timeout per user
 
 class RecorderSession {
     constructor(channel) {
@@ -32,42 +32,39 @@ class RecorderSession {
 
     start() {
         this._wireSpeaking();
+        // always write a frame every 20 ms, even if it’s silence
         this.mixerTimer = setInterval(() => {
             const frame = this.mixer.mixNextFrame();
             this.writer.write(frame);
         }, 20);
     }
 
-    // inside RecorderSession class
     _wireSpeaking() {
         this.receiver.speaking.on('start', userId => {
-            if (this.subscriptions.has(userId)) return; // already active
-
+            if (this.subscriptions.has(userId)) return;
             const opusStream = this.receiver.subscribe(userId, {
                 end: { behavior: EndBehaviorType.AfterSilence, duration: END_SILENCE_MS }
             });
             const decoder = new prism.opus.Decoder({ rate: 48000, channels: 2, frameSize: 960 });
 
-            const cleanup = (why = 'end') => {
+            const cleanup = () => {
                 try { opusStream.removeAllListeners(); } catch {}
                 try { decoder.removeAllListeners(); } catch {}
                 try { opusStream.destroy(); } catch {}
                 try { decoder.destroy(); } catch {}
-                this.subscriptions.delete(userId); // <-- critical so future 'start' re-subscribes
-                logger.debug(`cleaned ${userId} due to ${why}`);
+                this.subscriptions.delete(userId);
             };
+            opusStream.once('end', cleanup);
+            opusStream.once('close', cleanup);
+            opusStream.once('finish', cleanup);
+            decoder.once('end', cleanup);
+            decoder.on('error', cleanup);
+            opusStream.on('error', cleanup);
 
-            opusStream.once('end',   () => cleanup('end'));
-            opusStream.once('close', () => cleanup('close'));
-            opusStream.once('finish',() => cleanup('finish'));
-            decoder.once('end',      () => cleanup('decoder-end'));
-            decoder.on('error',      (e) => { logger.warn(`decoder err ${userId}: ${e}`); cleanup('decoder-error'); });
-            opusStream.on('error',   (e) => { logger.warn(`opus err ${userId}: ${e}`); cleanup('opus-error'); });
-
-            // feed mixer
             decoder.on('data', (pcm) => {
-                for (let off = 0; off + 960*2*2 <= pcm.length; off += 960*2*2) {
-                    this.mixer.pushPCMFrame(userId, pcm.subarray(off, off + 960*2*2));
+                // slice PCM into 20‑ms frames (960 samples/channel @ 48 kHz, stereo 16‑bit)
+                for (let off = 0; off + 960 * 2 * 2 <= pcm.length; off += 960 * 2 * 2) {
+                    this.mixer.pushPCMFrame(userId, pcm.subarray(off, off + 960 * 2 * 2));
                 }
             });
 
@@ -75,14 +72,15 @@ class RecorderSession {
             this.subscriptions.set(userId, { opusStream, decoder });
         });
 
-        // Safety: if Discord fires 'end' but AfterSilence didn't tear down yet,
-        // nudge cleanup after the silence window.
+        // safety: tear down lingering streams after the silence window
         this.receiver.speaking.on('end', userId => {
             const sub = this.subscriptions.get(userId);
             if (!sub) return;
             setTimeout(() => {
                 if (this.subscriptions.has(userId)) {
                     try { sub.opusStream.destroy(); } catch {}
+                    try { sub.decoder.destroy(); } catch {}
+                    this.subscriptions.delete(userId);
                 }
             }, END_SILENCE_MS + 250);
         });
