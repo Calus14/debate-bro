@@ -2,6 +2,7 @@ const { joinVoiceChannel, EndBehaviorType } = require('@discordjs/voice');
 const prism = require('prism-media');
 const wav = require('wav');
 const path = require('path');
+const fs = require('fs');
 const AudioMixer = require('./AudioMixer');
 
 const END_SILENCE_MS = Number(process.env.END_SILENCE_MS || 30000); // silence timeout per user
@@ -28,6 +29,13 @@ class RecorderSession {
 
         this.subscriptions = new Map();
         this.mixerTimer = null;
+
+        // Track the start time of the recording for relative timestamps
+        this.recordStart = Date.now();
+        // Map to store currently active speakers and the time they started speaking
+        this.activeSpeakers = new Map();
+        // Array to store segments of speech with start and end times
+        this.segments = [];
     }
 
     start() {
@@ -61,6 +69,12 @@ class RecorderSession {
             decoder.on('error', cleanup);
             opusStream.on('error', cleanup);
 
+            // Record when the user starts speaking relative to the beginning of the recording
+            if (!this.activeSpeakers.has(userId)) {
+                const startTime = Date.now() - this.recordStart;
+                this.activeSpeakers.set(userId, startTime);
+            }
+
             decoder.on('data', (pcm) => {
                 // slice PCM into 20‑ms frames (960 samples/channel @ 48 kHz, stereo 16‑bit)
                 for (let off = 0; off + 960 * 2 * 2 <= pcm.length; off += 960 * 2 * 2) {
@@ -76,6 +90,15 @@ class RecorderSession {
         this.receiver.speaking.on('end', userId => {
             const sub = this.subscriptions.get(userId);
             if (!sub) return;
+
+            // Record when the user stops speaking relative to the beginning of the recording
+            const startTime = this.activeSpeakers.get(userId);
+            if (startTime !== undefined) {
+                const endTime = Date.now() - this.recordStart;
+                this.segments.push({ userId, start: startTime, end: endTime });
+                this.activeSpeakers.delete(userId);
+            }
+
             setTimeout(() => {
                 if (this.subscriptions.has(userId)) {
                     try { sub.opusStream.destroy(); } catch {}
@@ -92,9 +115,26 @@ class RecorderSession {
             try { opusStream.destroy(); } catch {}
             try { decoder.destroy(); } catch {}
         }
+
+        // Finalize any speakers that are still active at the time of stopping
+        const now = Date.now();
+        for (const [userId, startTime] of this.activeSpeakers.entries()) {
+            this.segments.push({ userId, start: startTime, end: now - this.recordStart });
+        }
+        this.activeSpeakers.clear();
+
+        // Write the metadata about who spoke when to a sidecar JSON file
+        const metadataPath = this.outputPath.replace(/\.wav$/, '.json');
+        try {
+            fs.writeFileSync(metadataPath, JSON.stringify(this.segments, null, 2));
+        } catch (err) {
+            console.error('Failed to write metadata file:', err);
+        }
+
         this.writer.end();
         this.connection.destroy();
-        return this.outputPath;
+        // Return both the audio and metadata file paths
+        return { audioPath: this.outputPath, metadataPath };
     }
 }
 
