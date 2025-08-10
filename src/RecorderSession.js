@@ -6,6 +6,11 @@ const fs = require('fs');
 const AudioMixer = require('./AudioMixer');
 const { uploadFile } = require('./S3Uploader');
 
+// Use the global logger if available; otherwise fall back to console.  This
+// allows the bot to integrate with the winston logger defined in config.js
+// while still working when no custom logger is provided.
+const logger = global.logger || console;
+
 const END_SILENCE_MS = Number(process.env.END_SILENCE_MS || 30000); // silence timeout per user
 
 class RecorderSession {
@@ -43,13 +48,34 @@ class RecorderSession {
         this.activeSpeakers = new Map();
         // Array to store segments of speech with start and end times
         this.segments = [];
+
+        // Preallocate a buffer of silence for one 20 ms frame (960 samples/channel, 2 channels,
+        // 16 bits per sample). This will be used to write a single stream of silence when no
+        // speakers are active, preventing multiple streams from emitting their own silence.
+        this.silenceFrame = Buffer.alloc(960 * 2 * 2);
+
+        // Log creation of a new recording session.  Include the guild ID and
+        // the initial output path for the WAV file so operators can trace
+        // where files are stored on disk.
+        try {
+            logger.info(
+                `RecorderSession created for guild ${this.guildId}, initial output path ${this.outputPath}`
+            );
+        } catch {}
     }
 
     start() {
         this._wireSpeaking();
         // always write a frame every 20 ms, even if it’s silence
         this.mixerTimer = setInterval(() => {
-            const frame = this.mixer.mixNextFrame();
+            // Write a single stream of silence when no speakers are active.  Otherwise
+            // delegate to the mixer to combine the active user streams.
+            let frame;
+            if (this.activeSpeakers.size === 0) {
+                frame = this.silenceFrame;
+            } else {
+                frame = this.mixer.mixNextFrame();
+            }
             this.writer.write(frame);
         }, 20);
 
@@ -61,6 +87,12 @@ class RecorderSession {
                 console.error('Error during periodic flush:', err);
             }
         }, this.flushIntervalMs);
+
+        // Emit a log indicating that recording has started for this guild.  This
+        // helps correlate audio files with when recording began.
+        try {
+            logger.info(`Recording started for guild ${this.guildId}`);
+        } catch {}
     }
 
     _wireSpeaking() {
@@ -87,6 +119,7 @@ class RecorderSession {
 
             // Record when the user starts speaking relative to the beginning of the recording
             if (!this.activeSpeakers.has(userId)) {
+                logger.info("adding speaker "+userId)
                 const startTime = Date.now() - this.recordStart;
                 this.activeSpeakers.set(userId, startTime);
             }
@@ -113,6 +146,7 @@ class RecorderSession {
                 const endTime = Date.now() - this.recordStart;
                 this.segments.push({ userId, start: startTime, end: endTime });
                 this.activeSpeakers.delete(userId);
+                logger.info("removing user "+userId)
             }
 
             setTimeout(() => {
@@ -132,6 +166,14 @@ class RecorderSession {
      */
     _flushSegment() {
         const flushTime = Date.now();
+
+        // Log the beginning of a flush operation.  Include a timestamp to aid
+        // in debugging when segments were rotated.
+        try {
+            logger.info(
+                `Flushing recording for guild ${this.guildId} at ${new Date(flushTime).toISOString()}`
+            );
+        } catch {}
         // Finalize segments for any speakers currently active
         for (const [userId, startTime] of this.activeSpeakers.entries()) {
             // Record the end time relative to the start of this recording
@@ -143,21 +185,49 @@ class RecorderSession {
         const metadataPath = this.outputPath.replace(/\.wav$/, '.json');
         try {
             fs.writeFileSync(metadataPath, JSON.stringify(this.segments, null, 2));
+            // Log successful metadata write along with number of segments
+            try {
+                logger.info(
+                    `Metadata written for guild ${this.guildId}: ${metadataPath} (segments=${this.segments.length})`
+                );
+            } catch {}
         } catch (err) {
-            console.error('Failed to write metadata file during flush:', err);
+            logger.error('Failed to write metadata file during flush:', err);
         }
         // Finalize the WAV file
         try {
             this.writer.end();
+            // Log that the current WAV file has been finalized
+            try {
+                logger.info(`WAV segment finalized: ${this.outputPath}`);
+            } catch {}
         } catch {}
         // Upload the files to S3 if S3 is configured
         try {
             const wavKey = path.basename(this.outputPath);
             const jsonKey = path.basename(metadataPath);
-            uploadFile(this.outputPath, wavKey).catch(() => {});
-            uploadFile(metadataPath, jsonKey).catch(() => {});
+            // Upload WAV file and log success or failure
+            uploadFile(this.outputPath, wavKey)
+                .then(() => {
+                    try {
+                        logger.info(`Uploaded WAV to S3: ${wavKey}`);
+                    } catch {}
+                })
+                .catch((err) => {
+                    logger.error(`Failed to upload WAV to S3: ${wavKey}`, err);
+                });
+            // Upload JSON file and log success or failure
+            uploadFile(metadataPath, jsonKey)
+                .then(() => {
+                    try {
+                        logger.info(`Uploaded JSON metadata to S3: ${jsonKey}`);
+                    } catch {}
+                })
+                .catch((err) => {
+                    logger.error(`Failed to upload JSON metadata to S3: ${jsonKey}`, err);
+                });
         } catch (err) {
-            console.error('Failed to upload files to S3:', err);
+            logger.error('Failed to upload files to S3:', err);
         }
         // Prepare for the next segment
         const newTime = flushTime;
@@ -169,10 +239,18 @@ class RecorderSession {
         });
         this.segments = [];
         this.recordStart = newTime;
+        // Log that a new recording segment has begun
+        try {
+            logger.info(`Starting new recording segment for guild ${this.guildId}: ${this.outputPath}`);
+        } catch {}
     }
 
     stop() {
         clearInterval(this.mixerTimer);
+        // Indicate that recording is about to stop
+        try {
+            logger.info(`Stopping recording for guild ${this.guildId}`);
+        } catch {}
         // Stop the periodic flush timer
         if (this.flushTimer) {
             clearInterval(this.flushTimer);
@@ -194,24 +272,52 @@ class RecorderSession {
         const metadataPath = this.outputPath.replace(/\.wav$/, '.json');
         try {
             fs.writeFileSync(metadataPath, JSON.stringify(this.segments, null, 2));
+            // Log final metadata written
+            try {
+                logger.info(
+                    `Final metadata written for guild ${this.guildId}: ${metadataPath} (segments=${this.segments.length})`
+                );
+            } catch {}
         } catch (err) {
-            console.error('Failed to write metadata file:', err);
+            logger.error('Failed to write metadata file:', err);
         }
 
         // Finalize the WAV file
         this.writer.end();
+        try {
+            logger.info(`Final WAV written: ${this.outputPath}`);
+        } catch {}
 
         // Upload final files to S3
         try {
             const wavKey = path.basename(this.outputPath);
             const jsonKey = path.basename(metadataPath);
-            uploadFile(this.outputPath, wavKey).catch(() => {});
-            uploadFile(metadataPath, jsonKey).catch(() => {});
+            uploadFile(this.outputPath, wavKey)
+                .then(() => {
+                    try {
+                        logger.info(`Uploaded final WAV to S3: ${wavKey}`);
+                    } catch {}
+                })
+                .catch((err) => {
+                    logger.error(`Failed to upload final WAV to S3: ${wavKey}`, err);
+                });
+            uploadFile(metadataPath, jsonKey)
+                .then(() => {
+                    try {
+                        logger.info(`Uploaded final JSON metadata to S3: ${jsonKey}`);
+                    } catch {}
+                })
+                .catch((err) => {
+                    logger.error(`Failed to upload final JSON metadata to S3: ${jsonKey}`, err);
+                });
         } catch (err) {
-            console.error('Failed to upload files to S3:', err);
+            logger.error('Failed to upload files to S3:', err);
         }
 
         this.connection.destroy();
+        try {
+            logger.info(`Recording session stopped for guild ${this.guildId}`);
+        } catch {}
         // Return both the audio and metadata file paths
         return { audioPath: this.outputPath, metadataPath };
     }
