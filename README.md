@@ -1,164 +1,142 @@
+Discord Voice Logger — Experimental Bot (Node.js)
 
-# Discord Voice Logger — Experimental Bot
+This is an experimental Discord bot written in Node.js. It joins voice channels, records conversations, and can optionally upload recordings and speaker metadata to Amazon S3. The goal is to maintain conversational history, including the ability to review exact spoken words from different users.
+🚀 Setup
+✅ Prerequisites
 
-This is an **experimental Discord bot** designed to join voice channels, record conversations, and provide playback of individual user audio.
-The goal is to maintain conversational history, including the ability to review **exact spoken words** from different users.
+    Node.js 18+ and npm
 
----
+    Git
 
-## 🚀 Setup
+    Access to create a bot on the Discord Developer Portal
 
-### ✅ Prerequisites
+    Optional: Terraform and an AWS account if you want to provision the S3 bucket using the provided Terraform configuration
 
-* **Python 3.11+**
-* [Git](https://git-scm.com/)
-* Access to create a bot on the [Discord Developer Portal](https://discord.com/developers/applications)
+✅ Installing Dependencies
 
----
+    Clone this repository:
 
-### ✅ Virtual Environment Setup
+git clone https://github.com/Calus14/debate-bro.git
+cd debate-bro
 
-1. Clone this repository
+Install Node dependencies:
 
-```bash
-git clone <repo-url>
-cd <repo-folder>
-```
+    npm install
 
-2. Create a virtual environment
+✅ Environment Variables
 
-```bash
-python -m venv venv
-```
+Create a file called .env in the project root with your default configuration. Optionally, you can create a .env.local file with overrides that take precedence over the values in .env.
 
-3. Activate the environment
+A minimal .env might look like this:
 
-* On **Windows**:
-
-```bash
-venv\Scripts\activate
-```
-
-* On **macOS/Linux**:
-
-```bash
-source venv/bin/activate
-```
-
-4. Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
----
-
-### ✅ Environment Variables
-
-Create a file called `.env.local` in the project root with:
-
-```
+# Discord bot token (from the Developer Portal)
 DISCORD_BOT_TOKEN=your_discord_bot_token_here
-```
 
-> ⚠️ **Do NOT commit `.env.local` to Git.**
-> `.env` is reserved for Docker deployments and injected runtime variables.
+# How long silence (ms) constitutes the end of speech from a user (default 30000)
+END_SILENCE_MS=30000
 
----
+# Interval in minutes to split and flush recordings (default 5). If FLUSH_INTERVAL_MS is set, it overrides this.
+FLUSH_INTERVAL_MINUTES=5
 
-## 🛠️ Discord Bot Setup
+# Optional: Override the flush interval in milliseconds
+# FLUSH_INTERVAL_MS=300000
 
-1. Go to the [Discord Developer Portal](https://discord.com/developers/applications)
-2. Create a **New Application**
-3. Under **Bot**, add a bot user and copy its **Token**
-4. Under **OAuth2 > URL Generator**:
+# AWS credentials and S3 details (required only if uploading recordings to S3)
+AWS_ACCESS_KEY_ID=your_access_key
+AWS_SECRET_ACCESS_KEY=your_secret
+AWS_REGION=us-east-1
+S3_BUCKET_NAME=your_bucket_name
 
-    * Scopes:
-        * ✅ `bot`
-        * ✅ `applications.commands`
-    * Bot Permissions:
-        * ✅ View Channels
-        * ✅ Send Messages
-        * ✅ Read Message History
-        * ✅ Connect
-        * ✅ Speak
-        * ✅ Use Voice Activity
+If a .env.local file exists, the bot will load it after .env and override any matching keys. This is useful for local development without modifying your base .env.
 
-5. Copy the generated OAuth2 URL and invite the bot to your server
+Notes:
 
----
+    If FLUSH_INTERVAL_MS is set, it overrides FLUSH_INTERVAL_MINUTES.
 
-## 🖥️ Running the Bot
+    The AWS variables are only required if you want the bot to upload recordings to S3. Leaving them unset will disable S3 uploads.
 
-```bash
-python src/echo_bot_application.py
-```
+✅ Running the Bot Locally
 
----
+After installing dependencies and setting environment variables, you can start the bot locally with:
 
-## 🎙️ Commands
+npm start
 
-* `/join` — Starts recording in the voice channel you’re connected to
-* `/leave` — Stops recording and sends back individual user audio files
+Invite the bot to a server (see below) and use the /join and /leave slash commands to start and stop recording. When the bot stops recording, it will return the paths to the audio and metadata files. If S3 uploads are configured, it will also upload those files to your bucket.
+✅ Discord Bot Setup
 
----
+    Go to the Discord Developer Portal and create a New Application.
 
-## 📝 Notes
+    Under Bot, add a bot user and copy its Token.
 
-* This project is experimental — expect updates and behavior changes
-* It is **not recommended for production logging without further customization**
-* Real-time deploys will inject environment variables via Docker runtime
+    Under OAuth2 → URL Generator:
 
----
+        Scopes:
 
-## 🐳 Running the Bot with Docker
+            ✅ bot
 
-### ✅ Build the Docker Image
+            ✅ applications.commands
 
-```bash
+        Bot Permissions:
+
+            ✅ View Channels
+
+            ✅ Send Messages
+
+            ✅ Read Message History
+
+            ✅ Connect
+
+            ✅ Speak
+
+            ✅ Use Voice Activity
+
+    Copy the generated OAuth2 URL and invite the bot to your server.
+
+🐳 Running the Bot with Docker
+
+A Dockerfile and docker-compose.yml are provided for convenience. On Linux you can use network_mode: "host" to allow UDP voice connections. On Windows/macOS, host networking is not supported, so it's recommended to run directly with Node.js instead of Docker.
+
+To build and run the bot with Docker:
+
 docker-compose build
-```
-
-### ✅ Run the Bot
-
-```bash
 docker-compose up
-```
 
----
+The container reads variables from .env and .env.local just like a local run. Set your AWS and Discord variables in those files.
+☁️ S3 Storage and Terraform
 
-### ⚠️ Voice Connection Note — Docker Networking
+The bot can optionally upload audio recordings and their speaker metadata to Amazon S3. To use this feature:
 
-Discord voice connections require outbound **UDP** access to Discord's media servers.
-This can behave differently depending on your host OS:
+    Create an S3 bucket manually or with the provided Terraform configuration.
 
-| OS            | Recommended Network Mode         | Notes                                                               |
-|---------------|-----------------------------------|---------------------------------------------------------------------|
-| **Linux**    | `network_mode: "host"`            | Allows direct UDP connections (required for Discord voice bots)    |
-| **Windows**  | ❌ Host networking not supported  | Voice connections may fail — recommended to run outside Docker     |
-| **macOS**    | ❌ Host networking not supported  | Same as Windows — Docker Desktop limits UDP NAT traversal          |
+    Set AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, and S3_BUCKET_NAME in your .env or .env.local file.
 
----
+A simple Terraform configuration is included under the terraform/ directory. To provision a bucket using Terraform:
 
-### ✅ Example `docker-compose.yml` for Linux
+cd terraform
+terraform init
+terraform apply -var="bucket_name=your-bucket-name" -var="aws_region=us-east-1"
 
-```yaml
-version: '3'
-services:
-  discord-bot:
-    build: .
-    env_file:
-      - .env
-    network_mode: "host"  # Needed for voice on Linux
-```
+This will create a private S3 bucket named your-bucket-name. After the bucket is created, set S3_BUCKET_NAME=your-bucket-name in your environment.
+📝 Commands
 
----
+    /join — Starts recording in the voice channel you’re connected to.
 
-### ✅ Running without Docker (Recommended on Windows/macOS)
+    /leave — Stops recording and returns the recording paths. If S3 is configured, this will also upload recordings and metadata to your bucket.
 
-```bash
-python src/echo_bot_application.py
-```
+📝 Notes
 
-> On **Windows/macOS**, Docker may block Discord voice due to networking limitations.
-> For best results, run directly with Python in a virtual environment.
+    This project is experimental — expect updates and behavior changes.
+
+    Running inside Docker requires host networking (Linux only) due to Discord voice connections. On Windows/macOS, run the bot directly with Node.js.
+
+    Real-time deploys will inject environment variables via Docker runtime; you should never commit your .env or .env.local files to Git.
+
+🔧 Additional Configuration
+
+You can adjust the bot's behavior with additional environment variables:
+
+    END_SILENCE_MS — How long (in milliseconds) of silence denotes that a user has stopped speaking. Defaults to 30000 (30 seconds).
+
+    FLUSH_INTERVAL_MINUTES or FLUSH_INTERVAL_MS — How often the bot flushes (splits) audio and metadata into new files. Defaults to 5 minutes. Set FLUSH_INTERVAL_MS to override with a value in milliseconds.
+
+These values let you tune the recording segmentation and silence detection to your needs.

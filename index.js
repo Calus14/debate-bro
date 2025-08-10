@@ -1,4 +1,5 @@
-require('dotenv').config({ path: '.env.local', override: true });
+require('dotenv').config(); // loads .env if present
+require('dotenv').config({ path: '.env.local', override: true }); // overrides with .env.local
 const { setupLogging } = require('./src/config');
 const Bot = require('./src/Bot');
 
