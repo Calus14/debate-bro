@@ -2,7 +2,7 @@ const { Events } = require('discord.js');
 
 module.exports = {
     [Events.ClientReady]: (bot, client) => {
-        logger.log(`✅ ${client.user.tag} is online!`);
+        logger.info(`✅ ${client.user.tag} is online!`);
     },
     [Events.InteractionCreate]: async (bot, interaction) => {
         if (!interaction.isChatInputCommand()) return;

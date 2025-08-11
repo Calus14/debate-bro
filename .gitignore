@@ -26,8 +26,11 @@ share/python-wheels/
 *.egg
 MANIFEST
 node_modules/*
-package-lock.json
+bot/package-lock.json
 tf/*
+
+logs/*
+bot/logs/*
 
 
 # PyInstaller
@@ -139,7 +142,7 @@ celerybeat.pid
 *.sage.py
 
 # Local developer keys
-.env.local
+bot/.env.local
 
 # Environments
 .envrc

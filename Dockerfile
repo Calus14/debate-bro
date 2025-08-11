@@ -1,22 +1,24 @@
-FROM python:3.11-slim
+# Dockerfile for Discord Voice Logger (Node.js)
 
-# Install required packages (like ffmpeg if needed for audio)
+# Use a slim Node.js image as the base. Node 18 is an LTS release supported by discord.js.
+FROM node:18-slim
+
+# Install ffmpeg which is required for audio processing used by prism-media.
 RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
 
-# Set workdir
+# Set the working directory inside the container
 WORKDIR /app
 
-# Copy requirements and install them
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy package.json and package-lock.json (if present) and install dependencies.
+# Using package*.json matches both files without failing if the lock file is absent.
+COPY package*.json ./
+RUN npm install --omit=dev
 
-# Copy the src folder (lets our bot actually run
-COPY src/ ./src/
+# Copy the rest of the application code into the container
+COPY . .
 
-# Copy the resources folder and other configs
-COPY resources/ ./resources/
-COPY .env.local .
+# Copy environment file. In production you should mount your own .env.local via docker-compose.
+COPY bot/.env.local .
 
-# Command to run the bot
-ENV PYTHONPATH=/app
-CMD ["python", "src/echo_bot_application.py"]
+# Start the bot. npm start runs `node index.js` as defined in package.json.
+CMD ["npm", "start"]
