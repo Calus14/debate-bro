@@ -3,7 +3,7 @@ services:
   discord-bot:
     build: .
     env_file:
-      - .env      # base values
-      - .env.local  # overrides if present
+      - bot/.env      # base values
+      - bot/.env.local  # overrides if present
     network_mode: "host"  # Needed for Discord voice on Linux
     restart: unless-stopped

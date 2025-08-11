@@ -18,7 +18,7 @@ RUN npm install --omit=dev
 COPY . .
 
 # Copy environment file. In production you should mount your own .env.local via docker-compose.
-COPY .env.local .
+COPY bot/.env.local .
 
 # Start the bot. npm start runs `node index.js` as defined in package.json.
 CMD ["npm", "start"]
