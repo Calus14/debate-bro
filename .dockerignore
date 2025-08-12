@@ -1,0 +1,15 @@
+.git
+**/node_modules
+logs
+bot/logs
+recordings
+**/*.wav
+
+# env/secrets
+.env
+bot/.env
+bot/.env.local
+
+# IaC (optional)
+tf/
+terraform/
