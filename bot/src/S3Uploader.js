@@ -22,6 +22,7 @@ const logger = global.logger || console;
  */
 async function uploadFile(localPath, remoteKey) {
     const bucket = process.env.S3_BUCKET_NAME || process.env.AWS_BUCKET_NAME || process.env.S3_BUCKET;
+    logger.info(`Attempting to upload to s3 bucket:${bucket}`);
     if (!bucket) return;
     try {
         // Dynamically require aws-sdk only when needed. This avoids breaking if the
