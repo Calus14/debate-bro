@@ -1,69 +1,67 @@
-# Discord Voice Logger Bot Deployment
+# Terraform Infrastructure for Debate Bro Bot
 
-This project contains a Discord bot with audio recording functionality, along with Terraform scripts for deploying it on AWS ECS Fargate.
+This directory contains the infrastructure configuration for deploying the Debate Bro Discord bot to AWS ECS using Fargate.
 
----
+## Prerequisites
 
-## 🛠️ Prerequisites
+- Terraform >= 1.3
+- AWS CLI configured
+- AWS account with proper IAM permissions
 
-- **AWS CLI** — [Install & Configure](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html)
-    - Run `aws configure` with an IAM user with `AdministratorAccess`
+## Required Variables
 
-- **Terraform** — [Install Terraform](https://developer.hashicorp.com/terraform/downloads)
-    - Recommended version `>= 1.3.0`
+Pass these in during plan/apply:
 
-- **Docker** — [Install Docker](https://docs.docker.com/get-docker/)
+```hcl
+variable "bucket_name" {
+  type = string
+}
 
----
+variable "aws_region" {
+  type = string
+}
 
-## 🚀 Deployment Steps
+variable "environment" {
+  type = string
+}
+```
 
-1. **Initialize Terraform**
-   ```
-   cd tf/
-   terraform init
-   ```
+## Usage
 
-2. **Deploy AWS Infrastructure**
-   ```
-   terraform apply
-   ```
-    - This will create:
-        - ECR Repository
-        - ECS Cluster
-        - VPC, Subnet, Internet Gateway, Security Group
-        - ECS Task Definition
-        - CloudWatch Log Group
-        - ECS Service
+### Initialize
 
-3. **Build & Push Docker Image**
-   ```
-   # Authenticate Docker to AWS ECR
-   aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin <your-aws-account-id>.dkr.ecr.us-east-2.amazonaws.com
+```bash
+terraform init
+```
 
-   # Build Docker Image
-   docker build -t discord-bot .
+### Plan
 
-   # Tag Docker Image for ECR
-   docker tag discord-bot:latest <your-aws-account-id>.dkr.ecr.us-east-2.amazonaws.com/discord-echo-bot:latest
+```bash
+terraform plan -out=tfplan \
+  -var="bucket_name=debate-bro-recordings-802539608101-dev" \
+  -var="aws_region=us-east-2" \
+  -var="environment=dev"
+```
 
-   # Push to ECR
-   docker push <your-aws-account-id>.dkr.ecr.us-east-2.amazonaws.com/discord-echo-bot:latest
-   ```
+### Apply
 
-4. **(Optional) Redeploy ECS Service**
-    - If you update the image tag, ECS can auto-pick it if using `latest`
-    - Otherwise, update the task definition and run `terraform apply` again
+```bash
+terraform apply tfplan
+```
 
-5. **Monitor Logs**
-    - Go to **CloudWatch → Log Groups → `/ecs/discord-echo-bot`**
+## Outputs
 
----
+- `bucket_name` – Name of the created S3 bucket
+- `ecs_cluster_name`, `ecs_service_name`
+- `bot_sg_id` – Security group used
+- `task_definition_arn` – ECS task definition
 
-## 📝 Notes
+## Notes
 
-- Local testing can be done with `docker-compose.yml` using `.env.local`
-- ECS Fargate keeps the bot running in a managed container
-- CI/CD can be added using CodePipeline + ECR triggers later
+- The Discord token is stored securely in SSM and injected via ECS task definition.
+- The S3 bucket name is passed via environment variables.
 
----
+Do NOT commit:
+- `tfplan`
+- `terraform.tfstate`
+- `.terraform/`

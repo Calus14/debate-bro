@@ -30,7 +30,9 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+*/node_modules/*
 node_modules/*
+*/tfplan
 bot/package-lock.json
 
 
@@ -222,3 +224,6 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+tf/terraform.tfstate
+tf/terraform.tfstate.backup

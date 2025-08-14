@@ -1,6 +1,6 @@
-const { Events } = require('discord.js');
+import { Events } from 'discord.js';
 
-module.exports = {
+export default {
     [Events.ClientReady]: (bot, client) => {
         logger.info(`✅ ${client.user.tag} is online!`);
     },

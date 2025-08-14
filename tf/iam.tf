@@ -29,3 +29,29 @@ resource "aws_iam_role_policy" "ecs_exec_ssm" {
     ]
   })
 }
+
+# + Create a Task Role your app will assume inside the container
+resource "aws_iam_role" "bot_task_role" {
+  name = "${var.app_name}-task-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect = "Allow",
+      Action = "sts:AssumeRole",
+      Principal = { Service = "ecs-tasks.amazonaws.com" }
+    }]
+  })
+}
+
+# + Allow writes to your recordings bucket
+resource "aws_iam_role_policy" "bot_task_s3" {
+  name = "discord-echo-bot-s3"
+  role = aws_iam_role.bot_task_role.id
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      { Effect = "Allow", Action = ["s3:ListBucket"], Resource = aws_s3_bucket.recordings.arn },
+      { Effect = "Allow", Action = ["s3:PutObject","s3:PutObjectAcl"], Resource = "${aws_s3_bucket.recordings.arn}/*" }
+    ]
+  })
+}

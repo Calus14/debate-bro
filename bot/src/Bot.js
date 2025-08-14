@@ -1,6 +1,6 @@
-const { Client, GatewayIntentBits, Partials, Collection, Events } = require('discord.js');
-const Commands = require('./Commands');
-const EventsMap = require('./Events');
+import { Client, GatewayIntentBits, Partials, Collection, Events } from 'discord.js';
+import Commands from './Commands.js';
+import EventsMap from './Events.js';
 
 class Bot {
     constructor() {
@@ -26,4 +26,4 @@ class Bot {
     }
 }
 
-module.exports = Bot;
+export default Bot;

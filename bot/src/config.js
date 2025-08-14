@@ -1,8 +1,8 @@
 // logging_config.js
-const fs = require('fs');
-const path = require('path');
-const { createLogger, format, transports } = require('winston');
-const DailyRotateFile = require('winston-daily-rotate-file');
+import fs from 'node:fs';
+import path from 'node:path';
+import { createLogger, format, transports } from 'winston';
+import DailyRotateFile from 'winston-daily-rotate-file';
 
 function setupLogging() {
     const LOG_DIR = process.env.LOG_DIR || path.join(process.cwd(), 'logs');
@@ -50,4 +50,4 @@ function setupLogging() {
     global.logger = logger;
 }
 
-module.exports = { setupLogging };
+export default setupLogging;

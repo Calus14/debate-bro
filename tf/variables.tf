@@ -3,7 +3,7 @@
 variable "bucket_name" {
   description = "The name of the S3 bucket to create."
   type        = string
-  default     = "arn:aws:s3:::debate-bro-recordings-802539608101-dev"
+  default     = "debate-bro-recordings-802539608101-dev"
 }
 
 variable "aws_region" {
@@ -21,4 +21,10 @@ variable "environment" {
 variable "discord_token" {
   type      = string
   sensitive = true
+}
+
+variable "app_name" {
+  description = "Base name for ECS/ECR/Logs/SG"
+  type        = string
+  default     = "discord-debate-bro"
 }

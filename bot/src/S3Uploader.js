@@ -1,4 +1,11 @@
-const fs = require('fs');
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { fromNodeProviderChain } from '@aws-sdk/credential-providers';
+import fs from 'node:fs';
+
+const s3 = new S3Client({
+    region: process.env.AWS_REGION || process.env.S3_REGION,
+    credentials: fromNodeProviderChain()
+});
 
 // Use the global logger if available; otherwise fall back to console.  This
 // allows consistent logging throughout the application without requiring
@@ -25,34 +32,15 @@ async function uploadFile(localPath, remoteKey) {
     logger.info(`Attempting to upload to s3 bucket:${bucket}`);
     if (!bucket) return;
     try {
-        // Dynamically require aws-sdk only when needed. This avoids breaking if the
-        // dependency is not installed. The SDK will automatically pick up credentials
-        // from environment variables, shared credentials file, or IAM roles.
-        let AWS;
-        try {
-            AWS = require('aws-sdk');
-        } catch (requireErr) {
-            // Log and return if the aws-sdk cannot be loaded.  This allows the bot to
-            // operate without AWS when the dependency isn't installed (e.g. in dev).
-            logger.warn('aws-sdk is not installed; skipping S3 upload.');
-            return;
-        }
-        const s3 = new AWS.S3({ region: process.env.AWS_REGION || process.env.S3_REGION });
         const fileStream = fs.createReadStream(localPath);
         const params = { Bucket: bucket, Key: remoteKey, Body: fileStream };
 
-        // Log the upload initiation
-        try {
-            logger.info(`Uploading to S3: ${localPath} -> s3://${bucket}/${remoteKey}`);
-        } catch {}
-
-        await s3.upload(params).promise();
-        try {
-            logger.info(`S3 upload succeeded: ${remoteKey}`);
-        } catch {}
+        logger.info(`Uploading to S3: ${localPath} -> s3://${bucket}/${remoteKey}`);
+        await s3.send(new PutObjectCommand(params));
+        logger.info(`S3 upload succeeded: ${remoteKey}`);
     } catch (err) {
         logger.error('S3 upload failed:', err);
     }
 }
 
-module.exports = { uploadFile };
+export default uploadFile;
