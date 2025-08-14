@@ -1,25 +1,27 @@
 resource "aws_ecr_repository" "bot_repo" {
-  name = "discord-echo-bot"
+  name = var.app_name
+  force_delete = true
 }
 
 resource "aws_ecs_cluster" "bot_cluster" {
-  name = "discord-echo-bot"
+  name = var.app_name
 }
 
 resource "aws_cloudwatch_log_group" "bot_logs" {
-  name              = "/ecs/discord-echo-bot"
+  name              = "/ecs/${var.app_name}"
   retention_in_days = 14
 }
 
 resource "aws_ecs_task_definition" "bot_task" {
-  family                   = "discord-echo-bot"
+  family                   = var.app_name
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = 256
   memory                   = 512
   execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
+  task_role_arn      = aws_iam_role.bot_task_role.arn
   container_definitions = jsonencode([{
-    name         = "discord-echo-bot"
+    name         = "${var.app_name}"
     image        = "${aws_ecr_repository.bot_repo.repository_url}:latest"
     essential    = true
     portMappings = [{ containerPort = 3000, hostPort = 3000, protocol = "tcp" }]
@@ -43,13 +45,13 @@ resource "aws_ecs_task_definition" "bot_task" {
     ]
       secrets = [{
         name      = "DISCORD_TOKEN"
-        valueFrom = aws_ssm_parameter.discord_token.arn
+        valueFrom = data.aws_ssm_parameter.discord_token.arn
       }]
   }])
 }
 
 resource "aws_ecs_service" "ecs_service" {
-  name            = "discord-echo-bot"
+  name            = "${var.app_name}"
   cluster         = aws_ecs_cluster.bot_cluster.id
   task_definition = aws_ecs_task_definition.bot_task.arn
   desired_count   = 1
@@ -63,8 +65,7 @@ resource "aws_ecs_service" "ecs_service" {
   depends_on = [aws_cloudwatch_log_group.bot_logs]
 }
 
-resource "aws_ssm_parameter" "discord_token" {
-  name  = "/debate-bro/discord_token"
-  type  = "SecureString"
-  value = var.discord_token
+data "aws_ssm_parameter" "discord_token" {
+  name            = "/debate-bro/discord_token"
+  with_decryption = true
 }

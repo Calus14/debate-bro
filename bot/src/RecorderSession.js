@@ -1,15 +1,19 @@
-const { joinVoiceChannel, EndBehaviorType } = require('@discordjs/voice');
-const prism = require('prism-media');
-const wav = require('wav');
-const path = require('path');
-const fs = require('fs');
-const AudioMixer = require('./AudioMixer');
-const { uploadFile } = require('./S3Uploader');
+import { joinVoiceChannel, EndBehaviorType } from '@discordjs/voice';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import prism from 'prism-media';
+import wav from 'wav';
+import path from 'path';
+import fs from 'fs';
+import AudioMixer from './AudioMixer.js';
+import uploadFile from './S3Uploader.js';
 
 // Use the global logger if available; otherwise fall back to console.  This
 // allows the bot to integrate with the winston logger defined in config.js
 // while still working when no custom logger is provided.
 const logger = global.logger || console;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const END_SILENCE_MS = Number(process.env.END_SILENCE_MS || 30000); // silence timeout per user
 
@@ -331,4 +335,4 @@ class RecorderSession {
     }
 }
 
-module.exports = RecorderSession;
+export default RecorderSession;

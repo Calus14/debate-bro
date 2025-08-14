@@ -1,10 +1,10 @@
-const { SlashCommandBuilder, MessageFlags } = require('discord.js');
-const RecorderSession = require('./RecorderSession');
+import { SlashCommandBuilder, MessageFlags } from 'discord.js';
+import RecorderSession from './RecorderSession.js';
 
 // Use the global logger if available; otherwise fall back to console.
 const logger = global.logger || console;
 
-module.exports = {
+export default {
     join: {
         data: new SlashCommandBuilder().setName('join').setDescription('Join and start recording voice channel.'),
         async execute(bot, interaction) {

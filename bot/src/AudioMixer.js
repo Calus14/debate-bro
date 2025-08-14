@@ -57,4 +57,4 @@ class AudioMixer {
     }
 }
 
-module.exports = AudioMixer;
+export default AudioMixer;

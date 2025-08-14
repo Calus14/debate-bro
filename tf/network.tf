@@ -10,7 +10,7 @@ data "aws_subnets" "default" {
 }
 
 resource "aws_security_group" "bot_sg" {
-  name        = "discord-echo-bot-sg"
+  name        = "${var.app_name}-sg"
   description = "Egress-only SG for ECS tasks"
   vpc_id      = data.aws_vpc.default.id
 
@@ -21,7 +21,7 @@ resource "aws_security_group" "bot_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = { Name = "discord-echo-bot-sg" }
+  tags = { Name = "${var.app_name}-sg" }
 }
 
 output "subnet_ids" { value = data.aws_subnets.default.ids }

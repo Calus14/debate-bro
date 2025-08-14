@@ -1,13 +1,13 @@
 # ECR repo created previously
 import {
   to = aws_ecr_repository.bot_repo
-  id = "discord-echo-bot"
+  id = "discord-debate-bro"
 }
 
 # CloudWatch log group created previously
 import {
   to = aws_cloudwatch_log_group.bot_logs
-  id = "/ecs/discord-echo-bot"
+  id = "/ecs/discord-debate-bro"
 }
 
 # IAM exec role created previously
