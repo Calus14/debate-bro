@@ -28,3 +28,13 @@ variable "app_name" {
   type        = string
   default     = "discord-debate-bro"
 }
+
+variable "transcribe_function_name" {
+  type    = string
+  default = "debate-bro-transcribe"
+}
+
+variable "transcribe_image_uri" {
+  type        = string
+  description = "Container image for the transcribe Lambda"
+}

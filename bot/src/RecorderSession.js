@@ -30,7 +30,7 @@ class RecorderSession {
 
         this.receiver = this.connection.receiver;
         this.mixer = new AudioMixer();
-        this.outputPath = path.join(__dirname, `../recording_${this.guildId}_${Date.now()}.wav`);
+        this.outputPath = path.join(__dirname, `../recording_${Date.now()}.wav`);
         this.writer = new wav.FileWriter(this.outputPath, {
             channels: 2,
             sampleRate: 48000,
@@ -216,8 +216,21 @@ class RecorderSession {
         } catch {}
         // Upload the files to S3 if S3 is configured
         try {
-            const wavKey = path.basename(this.outputPath);
-            const jsonKey = path.basename(metadataPath);
+            const baseName = path.basename(this.outputPath).replace(/\.wav$/, '');
+            const prefix = `guild/${this.guildId}/channel/${this.channel.name}/call/${baseName}`;
+            const wavKey  = `${prefix}.wav`;
+            const metaKey = `${prefix}.metadata`;
+
+            // Upload JSON file and log success or failure
+            uploadFile(metadataPath, metaKey)
+                .then(() => {
+                    try {
+                        logger.info(`Uploaded JSON metadata to S3: ${jsonKey}`);
+                    } catch {}
+                })
+                .catch((err) => {
+                    logger.error(`Failed to upload JSON metadata to S3: ${jsonKey}`, err);
+                });
             // Upload WAV file and log success or failure
             uploadFile(this.outputPath, wavKey)
                 .then(() => {
@@ -228,16 +241,7 @@ class RecorderSession {
                 .catch((err) => {
                     logger.error(`Failed to upload WAV to S3: ${wavKey}`, err);
                 });
-            // Upload JSON file and log success or failure
-            uploadFile(metadataPath, jsonKey)
-                .then(() => {
-                    try {
-                        logger.info(`Uploaded JSON metadata to S3: ${jsonKey}`);
-                    } catch {}
-                })
-                .catch((err) => {
-                    logger.error(`Failed to upload JSON metadata to S3: ${jsonKey}`, err);
-                });
+
         } catch (err) {
             logger.error('Failed to upload files to S3:', err);
         }
@@ -302,8 +306,21 @@ class RecorderSession {
 
         // Upload final files to S3
         try {
-            const wavKey = path.basename(this.outputPath);
-            const jsonKey = path.basename(metadataPath);
+            const baseName = path.basename(this.outputPath).replace(/\.wav$/, '');
+            const prefix = `guild/${this.guildId}/channel/${this.channel.name}/call/${baseName}`;
+            const wavKey  = `${prefix}.wav`;
+            const metaKey = `${prefix}.metadata`;
+
+            uploadFile(metadataPath, metaKey)
+                .then(() => {
+                    try {
+                        logger.info(`Uploaded final JSON metadata to S3: ${jsonKey}`);
+                    } catch {}
+                })
+                .catch((err) => {
+                    logger.error(`Failed to upload final JSON metadata to S3: ${jsonKey}`, err);
+                });
+
             uploadFile(this.outputPath, wavKey)
                 .then(() => {
                     try {
@@ -312,15 +329,6 @@ class RecorderSession {
                 })
                 .catch((err) => {
                     logger.error(`Failed to upload final WAV to S3: ${wavKey}`, err);
-                });
-            uploadFile(metadataPath, jsonKey)
-                .then(() => {
-                    try {
-                        logger.info(`Uploaded final JSON metadata to S3: ${jsonKey}`);
-                    } catch {}
-                })
-                .catch((err) => {
-                    logger.error(`Failed to upload final JSON metadata to S3: ${jsonKey}`, err);
                 });
         } catch (err) {
             logger.error('Failed to upload files to S3:', err);
