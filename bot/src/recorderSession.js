@@ -5,8 +5,8 @@ import prism from 'prism-media';
 import wav from 'wav';
 import path from 'path';
 import fs from 'fs';
-import AudioMixer from './AudioMixer.js';
-import uploadFile from './S3Uploader.js';
+import AudioMixer from './audioMixer.js';
+import uploadFile from './utils/s3Uploader.js';
 
 // Use the global logger if available; otherwise fall back to console.  This
 // allows the bot to integrate with the winston logger defined in config.js
@@ -16,6 +16,31 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const END_SILENCE_MS = Number(process.env.END_SILENCE_MS || 30000); // silence timeout per user
+
+
+const LOGS_TZ = process.env.LOGS_TZ || "America/Chicago";
+
+function currentDateFolder(t = new Date()) {
+    // Build MM_DD_YYYY in a fixed TZ
+    const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: LOGS_TZ,
+        month: "2-digit",
+        day: "2-digit",
+        year: "numeric",
+    }).formatToParts(t);
+    const get = (type) => parts.find(p => p.type === type)?.value;
+    const mm = get("month");
+    const dd = get("day");
+    const yyyy = get("year");
+    return `${mm}_${dd}_${yyyy}`;
+}
+
+function safeKeyPart(s) {
+    // S3-safe-ish: keep letters/numbers/_-. replace everything else with _
+    return String(s ?? "")
+        .trim()
+        .replace(/[^\w.\-]+/g, "_");
+}
 
 class RecorderSession {
     constructor(channel) {
@@ -40,8 +65,8 @@ class RecorderSession {
         this.subscriptions = new Map();
         this.mixerTimer = null;
 
-        // Determine how often to flush the recording to disk (in milliseconds). Default is 5 minutes.
-        const intervalMinutes = process.env.FLUSH_INTERVAL_MINUTES || 5;
+        // Determine how often to flush the recording to disk (in milliseconds). Default is 3 minutes.
+        const intervalMinutes = process.env.FLUSH_INTERVAL_MINUTES || 3;
         const intervalMs = process.env.FLUSH_INTERVAL_MS;
         this.flushIntervalMs = Number(intervalMs) > 0 ? Number(intervalMs) : Number(intervalMinutes) * 60 * 1000;
         this.flushTimer = null;
@@ -216,8 +241,11 @@ class RecorderSession {
         } catch {}
         // Upload the files to S3 if S3 is configured
         try {
+            const channelKey = safeKeyPart(this.channel?.name ?? this.channel?.id ?? "unknown");
+            const dateFolder = currentDateFolder();
+
             const baseName = path.basename(this.outputPath).replace(/\.wav$/, '');
-            const prefix = `guild/${this.guildId}/channel/${this.channel.name}/call/${baseName}`;
+            const prefix = `guild/${this.guildId}/channel/${channelKey}/${dateFolder}/${baseName}`;
             const wavKey  = `${prefix}.wav`;
             const metaKey = `${prefix}.metadata`;
 
@@ -306,8 +334,11 @@ class RecorderSession {
 
         // Upload final files to S3
         try {
+            const channelKey = safeKeyPart(this.channel?.name ?? this.channel?.id ?? "unknown");
+            const dateFolder = currentDateFolder();
+
             const baseName = path.basename(this.outputPath).replace(/\.wav$/, '');
-            const prefix = `guild/${this.guildId}/channel/${this.channel.name}/call/${baseName}`;
+            const prefix = `guild/${this.guildId}/channel/${channelKey}/${dateFolder}/${baseName}`;
             const wavKey  = `${prefix}.wav`;
             const metaKey = `${prefix}.metadata`;
 

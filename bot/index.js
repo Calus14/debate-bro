@@ -3,7 +3,7 @@ dotenv.config(); // loads .env if present
 dotenv.config({ path: '.env.local', override: true }); // overrides with .env.local
 
 import setupLogging from './src/config.js';
-import Bot from './src/Bot.js';
+import Bot from './src/bot.js';
 
 setupLogging();
 const bot = new Bot();
