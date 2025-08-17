@@ -14,6 +14,11 @@ resource "aws_iam_role" "transcribe" {
   })
 }
 
+resource "aws_cloudwatch_log_group" "transcribe" {
+  name              = "/aws/lambda/debate-bro-transcribe"
+  retention_in_days = 14
+}
+
 # Minimal, managed policy for CloudWatch logs
 resource "aws_iam_role_policy_attachment" "lambda_logs" {
   role       = aws_iam_role.transcribe.name
@@ -58,6 +63,7 @@ resource "aws_lambda_function" "transcription_lambda" {
         S3_BUCKET_NAME   = var.bucket_name
       }
     }
+  depends_on = [aws_iam_role_policy_attachment.transcribe_basic_logs]
 }
 
 # Allow S3 bucket to invoke the Lambda

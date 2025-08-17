@@ -4,8 +4,7 @@ Reusable OO transcription module with unit auto-detection and debug logs.
 
 import json
 import os
-import tempfile
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from faster_whisper import WhisperModel
 from pydub import AudioSegment
@@ -72,9 +71,6 @@ def _load_segments(metadata: Any) -> List[Dict[str, Any]]:
 def _infer_unit_scale(segments: List[Dict[str, Any]], audio_dur_s: float) -> float:
     """
     Returns a scale factor to convert raw times -> seconds.
-
-    Heuristic: compare the max end/start to duration and pick the scale that
-    makes values "line up" with duration.
     """
     raw_vals: List[float] = []
     for s in segments:
@@ -99,7 +95,6 @@ def _infer_unit_scale(segments: List[Dict[str, Any]], audio_dur_s: float) -> flo
     best_err = float("inf")
     for scale in candidates:
         est_dur = max_raw / scale
-        # relative error vs audio duration
         err = abs(est_dur - audio_dur_s) / max(1e-6, audio_dur_s)
         if err < best_err:
             best_err = err
@@ -121,7 +116,7 @@ class Transcriber:
         self.device = device
         self.compute_type = compute_type
         self.beam_size = beam_size
-        self.debug = True#debug or os.getenv("TRANSCRIBE_DEBUG", "0") in ("1", "true", "True")
+        self.debug = True  # force on for now
         self._model: Optional[WhisperModel] = None
 
     def _log(self, *a: Any) -> None:
@@ -134,76 +129,60 @@ class Transcriber:
             self._model = WhisperModel(self.model_size, device=self.device, compute_type=self.compute_type)
         return self._model
 
-    def _transcribe_clip(self, clip_path: str) -> List[Dict[str, Any]]:
-        model = self._model_instance()
-        segments, _info = model.transcribe(clip_path, beam_size=self.beam_size)
-        out: List[Dict[str, Any]] = []
-        for seg in segments:
-            out.append(
-                {
-                    "start": seg.start,
-                    "end": seg.end,
-                    "text": (seg.text or "").strip(),
-                }
-            )
-        return out
+    def _assign_speaker(self, start: float, end: float, segs: List[Dict[str, Any]]) -> str:
+        """Finds the speaker segment that overlaps a whisper segment."""
+        for s in segs:
+            if start >= s["start_s"] and end <= s["end_s"]:
+                return s["speaker_id"]
+        # fallback: if no match, just return first/unknown
+        return segs[0]["speaker_id"] if segs else "unknown"
 
     def process_to_result(self, wav_path: str, metadata_path: str):
-            """Same as process_to_path but returns the JSON-able result list instead of writing a file."""
-            wav_path = resolve_path(wav_path)
-            meta_path = resolve_path(metadata_path)
+        """Transcribe full wav once, then align speaker IDs based on metadata segments."""
+        wav_path = resolve_path(wav_path)
+        meta_path = resolve_path(metadata_path)
 
-            with open(meta_path, "r", encoding="utf-8") as f:
-                metadata = json.load(f)
+        with open(meta_path, "r", encoding="utf-8") as f:
+            metadata = json.load(f)
 
-            raw_segments = _load_segments(metadata)
-            full_audio = AudioSegment.from_file(wav_path)
-            audio_len_ms = len(full_audio)
-            audio_len_s = audio_len_ms / 1000.0
+        raw_segments = _load_segments(metadata)
+        full_audio = AudioSegment.from_file(wav_path)
+        audio_len_ms = len(full_audio)
+        audio_len_s = audio_len_ms / 1000.0
 
-            scale = _infer_unit_scale(raw_segments, audio_len_s)
-            self._log(f"Audio duration: {audio_len_s:.2f}s  segments(raw)={len(raw_segments)}  unit_scale={scale}")
+        scale = _infer_unit_scale(raw_segments, audio_len_s)
+        self._log(f"Audio duration: {audio_len_s:.2f}s  segments(raw)={len(raw_segments)}  unit_scale={scale}")
 
-            segments = []
-            for s in raw_segments:
-                start_s = _coerce_float(s["start_raw"], 0.0)
-                end_s = _coerce_float(s["end_raw"], None)
-                if start_s is not None: start_s /= scale
-                if end_s is not None:   end_s /= scale
+        # Normalize metadata segments
+        norm_segments = []
+        for s in raw_segments:
+            start_s = _coerce_float(s["start_raw"], 0.0)
+            end_s = _coerce_float(s["end_raw"], None)
+            if start_s is not None: start_s /= scale
+            if end_s is not None:   end_s /= scale
+            start_s = max(0.0, start_s or 0.0)
+            end_s = min(audio_len_s, end_s) if end_s is not None else audio_len_s
+            norm_segments.append({
+                "speaker_id": s["speaker_id"],
+                "start_s": start_s,
+                "end_s": end_s,
+            })
 
-                start_ms = int(max(0.0, (start_s or 0.0)) * 1000)
-                end_ms = int((end_s * 1000)) if end_s is not None else audio_len_ms
-                end_ms = max(start_ms, min(end_ms, audio_len_ms))
-                segments.append({
-                    "speaker_id": s["speaker_id"],
-                    "start_s": (start_ms / 1000.0),
-                    "end_s": (end_ms / 1000.0) if end_s is not None else (audio_len_ms / 1000.0),
-                    "start_ms": start_ms, "end_ms": end_ms,
-                })
+        # Run whisper ONCE on the full audio
+        model = self._model_instance()
+        whisper_segments, _info = model.transcribe(wav_path, beam_size=self.beam_size)
 
-            if self.debug:
-                self._log("First 5 normalized segments:")
-                for i, seg in enumerate(segments[:5]):
-                    self._log(f"  #{i}: {seg}")
+        results = []
+        for seg in whisper_segments:
+            spk = self._assign_speaker(seg.start, seg.end, norm_segments)
+            results.append({
+                "speaker_id": spk,
+                "start": seg.start,
+                "end": seg.end,
+                "text": (seg.text or "").strip(),
+            })
 
-            results = []
-            with tempfile.TemporaryDirectory() as td:
-                for i, seg in enumerate(segments):
-                    if seg["end_ms"] <= seg["start_ms"]:
-                        self._log(f"Skip zero-length seg #{i}: {seg}")
-                        continue
-                    clip_path = os.path.join(td, f"clip_{seg['start_ms']}_{seg['end_ms']}.wav")
-                    self._log(f"Exporting seg #{i}: {seg}")
-                    full_audio[seg["start_ms"]:seg["end_ms"]].export(clip_path, format="wav")
-                    pieces = self._transcribe_clip(clip_path)
-                    for p in pieces or []:
-                        results.append({
-                            "speaker_id": seg["speaker_id"],
-                            "start": seg["start_s"] + (p.get("start") or 0.0),
-                            "end": seg["start_s"] + (p.get("end") or 0.0) if p.get("end") is not None else None,
-                            "text": p.get("text", ""),
-                        })
-            return results
+        return results
 
     def process_to_path(self, wav_path: str, metadata_path: str, output_path: str) -> None:
         results = self.process_to_result(wav_path, metadata_path)
