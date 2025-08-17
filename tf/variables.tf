@@ -18,11 +18,6 @@ variable "environment" {
   default     = "dev"
 }
 
-variable "discord_token" {
-  type      = string
-  sensitive = true
-}
-
 variable "app_name" {
   description = "Base name for ECS/ECR/Logs/SG"
   type        = string
@@ -32,9 +27,4 @@ variable "app_name" {
 variable "transcribe_function_name" {
   type    = string
   default = "debate-bro-transcribe"
-}
-
-variable "transcribe_image_uri" {
-  type        = string
-  description = "Container image for the transcribe Lambda"
 }

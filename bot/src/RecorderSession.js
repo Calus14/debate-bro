@@ -225,11 +225,11 @@ class RecorderSession {
             uploadFile(metadataPath, metaKey)
                 .then(() => {
                     try {
-                        logger.info(`Uploaded JSON metadata to S3: ${jsonKey}`);
+                        logger.info(`Uploaded JSON metadata to S3: ${metaKey}`);
                     } catch {}
                 })
                 .catch((err) => {
-                    logger.error(`Failed to upload JSON metadata to S3: ${jsonKey}`, err);
+                    logger.error(`Failed to upload JSON metadata to S3: ${metaKey}`, err);
                 });
             // Upload WAV file and log success or failure
             uploadFile(this.outputPath, wavKey)
@@ -314,11 +314,11 @@ class RecorderSession {
             uploadFile(metadataPath, metaKey)
                 .then(() => {
                     try {
-                        logger.info(`Uploaded final JSON metadata to S3: ${jsonKey}`);
+                        logger.info(`Uploaded final JSON metadata to S3: ${metaKey}`);
                     } catch {}
                 })
                 .catch((err) => {
-                    logger.error(`Failed to upload final JSON metadata to S3: ${jsonKey}`, err);
+                    logger.error(`Failed to upload final JSON metadata to S3: ${metaKey}`, err);
                 });
 
             uploadFile(this.outputPath, wavKey)

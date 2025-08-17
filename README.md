@@ -68,10 +68,7 @@ aws ecs update-service \
   --region us-east-2
 ```
 
-### Logs
+### Scripts
 
-```bash
-ecsLogs() {
-  aws logs tail /ecs/discord-debate-bro --follow --region us-east-2
-}
-```
+- Aliases for accessing your AWS where the bots are deployed are in scripts/aws-dev.sh - use source scripts/aws-dev.sh
+- Script to build and deploy Debate Bro is 

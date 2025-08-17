@@ -19,8 +19,14 @@ RUN pip install --upgrade pip
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt --target "${LAMBDA_TASK_ROOT}"
 
+ENV TRANSFORMERS_CACHE=/tmp/hf_cache
+ENV HF_HOME=/tmp/hf_cache
+
+# Pre-download the whisper model at build time (Lambda doesnt let us use disk space)
+RUN python -c "from faster_whisper import WhisperModel; WhisperModel('small', device='cpu', compute_type='int8')"
+
 # App code
-COPY transcriber.py handler.py local_test.py ${LAMBDA_TASK_ROOT}/
+COPY *.py ${LAMBDA_TASK_ROOT}/
 
 # Defaults (override via TF env if needed)
 ENV MODEL_SIZE=small COMPUTE_TYPE=int8

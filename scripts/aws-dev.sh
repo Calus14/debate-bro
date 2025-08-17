@@ -32,7 +32,7 @@ ecs-tasks() { aws ecs describe-tasks --cluster $CLUSTER --region $REGION --tasks
 alias ecs-td='TD=$(aws ecs describe-services --cluster $CLUSTER --services $SERVICE --region $REGION --query "services[0].taskDefinition" --output text); aws ecs describe-task-definition --task-definition $TD --region $REGION --query "taskDefinition.containerDefinitions[0].{Name:name,Image:image,Env:environment,Logs:logConfiguration.options}"'
 
 # ---- ECS logs (CloudWatch) ----
-alias ecs-logs='aws logs tail "/ecs/discord-echo-bot" --region $REGION --follow --since 1h'
+alias ecs-logs='aws logs tail /ecs/discord-debate-bro --region $REGION --follow --since 24h'
 
 # ---- Lambda ----
 alias lambda-get='aws lambda get-function-configuration --function-name $LAMBDA --region $REGION'

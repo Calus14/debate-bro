@@ -148,76 +148,65 @@ class Transcriber:
             )
         return out
 
-    def process_to_path(self, wav_path: str, metadata_path: str, output_path: str) -> None:
-        wav_path = resolve_path(wav_path)
-        meta_path = resolve_path(metadata_path)
+    def process_to_result(self, wav_path: str, metadata_path: str):
+            """Same as process_to_path but returns the JSON-able result list instead of writing a file."""
+            wav_path = resolve_path(wav_path)
+            meta_path = resolve_path(metadata_path)
 
-        with open(meta_path, "r", encoding="utf-8") as f:
-            metadata = json.load(f)
+            with open(meta_path, "r", encoding="utf-8") as f:
+                metadata = json.load(f)
 
-        raw_segments = _load_segments(metadata)
-        full_audio = AudioSegment.from_file(wav_path)
-        audio_len_ms = len(full_audio)
-        audio_len_s = audio_len_ms / 1000.0
+            raw_segments = _load_segments(metadata)
+            full_audio = AudioSegment.from_file(wav_path)
+            audio_len_ms = len(full_audio)
+            audio_len_s = audio_len_ms / 1000.0
 
-        scale = _infer_unit_scale(raw_segments, audio_len_s)  # raw/scale => seconds
-        self._log(f"Audio duration: {audio_len_s:.2f}s  segments(raw)={len(raw_segments)}  unit_scale={scale}")
+            scale = _infer_unit_scale(raw_segments, audio_len_s)
+            self._log(f"Audio duration: {audio_len_s:.2f}s  segments(raw)={len(raw_segments)}  unit_scale={scale}")
 
-        # Normalize to seconds and clamp to valid ranges
-        segments: List[Dict[str, Any]] = []
-        for s in raw_segments:
-            start_s = _coerce_float(s["start_raw"], 0.0)
-            end_s = _coerce_float(s["end_raw"], None)
-            if start_s is not None:
-                start_s = start_s / scale
-            if end_s is not None:
-                end_s = end_s / scale
+            segments = []
+            for s in raw_segments:
+                start_s = _coerce_float(s["start_raw"], 0.0)
+                end_s = _coerce_float(s["end_raw"], None)
+                if start_s is not None: start_s /= scale
+                if end_s is not None:   end_s /= scale
 
-            # Convert to ms for slicing; clamp
-            start_ms = int(max(0.0, (start_s or 0.0)) * 1000)
-            end_ms = int((end_s * 1000)) if end_s is not None else audio_len_ms
-            end_ms = max(start_ms, min(end_ms, audio_len_ms))
-
-            segments.append(
-                {
+                start_ms = int(max(0.0, (start_s or 0.0)) * 1000)
+                end_ms = int((end_s * 1000)) if end_s is not None else audio_len_ms
+                end_ms = max(start_ms, min(end_ms, audio_len_ms))
+                segments.append({
                     "speaker_id": s["speaker_id"],
                     "start_s": (start_ms / 1000.0),
                     "end_s": (end_ms / 1000.0) if end_s is not None else (audio_len_ms / 1000.0),
-                    "start_ms": start_ms,
-                    "end_ms": end_ms,
-                }
-            )
+                    "start_ms": start_ms, "end_ms": end_ms,
+                })
 
-        if self.debug:
-            self._log("First 5 normalized segments:")
-            for i, seg in enumerate(segments[:5]):
-                self._log(f"  #{i}: {seg}")
+            if self.debug:
+                self._log("First 5 normalized segments:")
+                for i, seg in enumerate(segments[:5]):
+                    self._log(f"  #{i}: {seg}")
 
-        results: List[Dict[str, Any]] = []
-        with tempfile.TemporaryDirectory() as td:
-            for i, seg in enumerate(segments):
-                if seg["end_ms"] <= seg["start_ms"]:
-                    self._log(f"Skip zero-length seg #{i}: {seg}")
-                    continue
-
-                clip_path = os.path.join(td, f"clip_{seg['start_ms']}_{seg['end_ms']}.wav")
-                # Slice and export
-                self._log(f"Exporting seg #{i}: {seg}")
-                full_audio[seg["start_ms"]:seg["end_ms"]].export(clip_path, format="wav")
-
-                pieces = self._transcribe_clip(clip_path)
-                if not pieces:
-                    self._log(f"No text for seg #{i}")
-                for p in pieces:
-                    results.append(
-                        {
+            results = []
+            with tempfile.TemporaryDirectory() as td:
+                for i, seg in enumerate(segments):
+                    if seg["end_ms"] <= seg["start_ms"]:
+                        self._log(f"Skip zero-length seg #{i}: {seg}")
+                        continue
+                    clip_path = os.path.join(td, f"clip_{seg['start_ms']}_{seg['end_ms']}.wav")
+                    self._log(f"Exporting seg #{i}: {seg}")
+                    full_audio[seg["start_ms"]:seg["end_ms"]].export(clip_path, format="wav")
+                    pieces = self._transcribe_clip(clip_path)
+                    for p in pieces or []:
+                        results.append({
                             "speaker_id": seg["speaker_id"],
                             "start": seg["start_s"] + (p.get("start") or 0.0),
                             "end": seg["start_s"] + (p.get("end") or 0.0) if p.get("end") is not None else None,
                             "text": p.get("text", ""),
-                        }
-                    )
+                        })
+            return results
 
+    def process_to_path(self, wav_path: str, metadata_path: str, output_path: str) -> None:
+        results = self.process_to_result(wav_path, metadata_path)
         with open(output_path, "w", encoding="utf-8") as out_f:
             json.dump(results, out_f, ensure_ascii=False, indent=2)
         self._log(f"Wrote {output_path} with {len(results)} segments")
