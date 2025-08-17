@@ -1,8 +1,3 @@
-resource "aws_ecr_repository" "bot_repo" {
-  name = var.app_name
-  force_delete = true
-}
-
 resource "aws_ecs_cluster" "bot_cluster" {
   name = var.app_name
 }

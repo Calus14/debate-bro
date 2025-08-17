@@ -41,3 +41,15 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "recordings" {
     }
   }
 }
+
+resource "aws_s3_bucket_notification" "recordings_trigger" {
+  bucket = aws_s3_bucket.recordings.id
+
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.transcription_lambda.arn
+    events              = ["s3:ObjectCreated:Put"]
+    filter_suffix       = ".wav"
+  }
+
+  depends_on = [aws_lambda_permission.allow_s3_invoke_transcription]
+}

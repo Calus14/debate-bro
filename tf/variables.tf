@@ -18,13 +18,13 @@ variable "environment" {
   default     = "dev"
 }
 
-variable "discord_token" {
-  type      = string
-  sensitive = true
-}
-
 variable "app_name" {
   description = "Base name for ECS/ECR/Logs/SG"
   type        = string
   default     = "discord-debate-bro"
+}
+
+variable "transcribe_function_name" {
+  type    = string
+  default = "debate-bro-transcribe"
 }

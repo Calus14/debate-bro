@@ -4,6 +4,6 @@ services:
     build: .
     env_file:
       - bot/.env      # base values
-      - bot/.env.local  # overrides if present
+      #- bot/.env.local  # overrides if present (SHould not be run when deploying to ECR)
     network_mode: "host"  # Needed for Discord voice on Linux
     restart: unless-stopped
