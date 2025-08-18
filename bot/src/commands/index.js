@@ -1,6 +1,9 @@
 import * as joinMod from "./join.js";
 import * as logsMod from "./logs.js";
 import * as leaveMod from "./leave.js";
+import * as playback from "./playback.js";
+import * as transcript from "./transcript.js";
+
 
 function normalize(mod) {
     const cmd = mod.default ?? mod;
@@ -15,6 +18,8 @@ const commands = new Map([
     normalize(joinMod),
     normalize(logsMod),
     normalize(leaveMod),
+    normalize(playback),
+    normalize(transcript)
 ]);
 
 export default commands;

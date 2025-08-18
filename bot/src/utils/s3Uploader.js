@@ -1,11 +1,8 @@
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers';
+import { config, requireConfig } from "../config.js";
 import fs from 'node:fs';
 
-const s3 = new S3Client({
-    region: process.env.AWS_REGION || process.env.S3_REGION,
-    credentials: fromNodeProviderChain()
-});
 
 // Use the global logger if available; otherwise fall back to console.  This
 // allows consistent logging throughout the application without requiring
@@ -28,7 +25,15 @@ const logger = global.logger || console;
  * @param {string} remoteKey Key to use when storing the file in S3
  */
 async function uploadFile(localPath, remoteKey) {
-    const bucket = process.env.S3_BUCKET_NAME || process.env.AWS_BUCKET_NAME || process.env.S3_BUCKET;
+    requireConfig("S3_BUCKET_NAME")
+    requireConfig("AWS_REGION")
+    const bucket = config.S3_BUCKET_NAME
+
+    const s3 = new S3Client({
+        region: config.AWS_REGION,
+        credentials: fromNodeProviderChain()
+    });
+
     logger.info(`Attempting to upload to s3 bucket:${bucket}`);
     if (!bucket) return;
     try {

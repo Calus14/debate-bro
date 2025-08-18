@@ -1,6 +1,7 @@
 import { joinVoiceChannel, EndBehaviorType } from '@discordjs/voice';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { config } from "./config.js";
 import prism from 'prism-media';
 import wav from 'wav';
 import path from 'path';
@@ -15,10 +16,7 @@ const logger = global.logger || console;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const END_SILENCE_MS = Number(process.env.END_SILENCE_MS || 30000); // silence timeout per user
-
-
-const LOGS_TZ = process.env.LOGS_TZ || "America/Chicago";
+const LOGS_TZ = "America/Chicago";
 
 function currentDateFolder(t = new Date()) {
     // Build MM_DD_YYYY in a fixed TZ
@@ -66,8 +64,8 @@ class RecorderSession {
         this.mixerTimer = null;
 
         // Determine how often to flush the recording to disk (in milliseconds). Default is 3 minutes.
-        const intervalMinutes = process.env.FLUSH_INTERVAL_MINUTES || 3;
-        const intervalMs = process.env.FLUSH_INTERVAL_MS;
+        const intervalMinutes = config.FLUSH_INTERVAL_MINUTES || 3;
+        const intervalMs = config.FLUSH_INTERVAL_MS;
         this.flushIntervalMs = Number(intervalMs) > 0 ? Number(intervalMs) : Number(intervalMinutes) * 60 * 1000;
         this.flushTimer = null;
 
